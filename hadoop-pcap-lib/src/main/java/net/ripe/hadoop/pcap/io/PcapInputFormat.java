@@ -17,29 +17,33 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.ObjectWritable;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.FileSplit;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapred.Reporter;
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 
 public class PcapInputFormat extends FileInputFormat<LongWritable, ObjectWritable> {
-	static final String READER_CLASS_PROPERTY = "net.ripe.hadoop.pcap.io.reader.class";
-
+	
 	public static final Log LOG = LogFactory.getLog(PcapInputFormat.class);
 
+	private static final String READER_CLASS_PROPERTY = "net.ripe.hadoop.pcap.io.reader.class";
+
 	@Override
-	public RecordReader<LongWritable, ObjectWritable> getRecordReader(InputSplit split, JobConf config, Reporter reporter) throws IOException {
+	public RecordReader<LongWritable, ObjectWritable> createRecordReader(InputSplit split,
+			TaskAttemptContext tasks) throws IOException, InterruptedException {
+		
 		FileSplit fileSplit = (FileSplit)split;
 		Path path = fileSplit.getPath();
 		long start = 0L;
 		long length = fileSplit.getLength();
-		return initPcapRecordReader(path, start, length, reporter, config);
+		return initPcapRecordReader(path, start, length, tasks.getConfiguration());
 	}
 
-	public static PcapRecordReader initPcapRecordReader(Path path, long start, long length, Reporter reporter, Configuration conf) throws IOException {
+	public static PcapRecordReader initPcapRecordReader(Path path, long start, long length, Configuration conf) throws IOException {
 	    FileSystem fs = path.getFileSystem(conf);
+	    
 	    FSDataInputStream baseStream = fs.open(path);
 	    DataInputStream stream = baseStream;
 		CompressionCodecFactory compressionCodecs = new CompressionCodecFactory(conf);
@@ -48,7 +52,7 @@ public class PcapInputFormat extends FileInputFormat<LongWritable, ObjectWritabl
         	stream = new DataInputStream(codec.createInputStream(stream));
 
 		PcapReader reader = initPcapReader(stream, conf);
-		return new PcapRecordReader(reader, start, length, baseStream, stream, reporter);
+		return new PcapRecordReader(reader, start, length, baseStream, stream);
 	}
 
 	public static PcapReader initPcapReader(DataInputStream stream, Configuration conf) {
@@ -69,7 +73,9 @@ public class PcapInputFormat extends FileInputFormat<LongWritable, ObjectWritabl
 	 * @see http://wiki.wireshark.org/Development/LibpcapFileFormat
 	 */
 	@Override
-	protected boolean isSplitable(FileSystem fs, Path filename) {
-		return false;
+	protected boolean isSplitable(JobContext context, Path file) {
+		return Boolean.FALSE;
 	}
+
+	
 }
